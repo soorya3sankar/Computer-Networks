@@ -1,0 +1,548 @@
+[24bcs062@mepcolinux ex1]$[24bcs062@mepcolinux ex1]$cat ex1
+[24bcs062@mepcolinux ex1]$cat bitstuffing.c
+#include<stdio.h>
+#include<string.h>
+
+#define max 100
+#define max_bit (max*8)
+#define max_stuff (max_bit*2)
+
+int data[max_bit], stuff[max_stuff], destuff[max_bit];
+int sender_framed[max_stuff];
+int sender_framelen = 0;
+
+char str[max];
+char output_str[max];
+int flag[]={0,1,1,1,1,1,1,0};
+int flaglen=8;
+
+void print(char *label, int arr[], int n){
+   int i;
+   printf("%s ", label);
+   for(i=0; i<n; i++){
+      printf("%d", arr[i]);
+      if((i+1) % 8 == 0){
+         print(" ");
+      }
+   }
+   printf("\n");
+}
+
+int bit_stuffing(int input_bits[], int input_len, int output_bits[]) {
+   int i,ones = 0, j = 0;
+   for(i=0; i<input_len; i++){
+      output_bits[j++] = input_bits[i];
+      ones = (input_bits[i] == 1) ? ones + 1 : 0;
+      if(ones == 5){
+         output_bits[j++] = 0;
+         ones = 0;
+      }
+   }
+   return j;
+}
+
+int bit_destuffing(int input_framed[], int total_len, int output_bits[]) {
+   int i,ones = 0, j = 0;
+   for(i=flaglen; i<total_len-flaglen; i++){
+      output_bits[j++] = input_framed[i];
+      ones = (input_framed[i] == 1) ? ones + 1 : 0;
+      if(ones == 5){
+         if(input_framed[i+1] != 0){
+            printf("\nError: Invalid stuffing detected\n");
+            return -1;
+         }
+         i++;
+         ones = 0;
+      }
+   }
+   return j;
+}
+
+void decode_binary_to_string(int input_bits[], int input_len, char target_str[]) {
+   int i,b,out_idx = 0;
+   for(i=0; i<input_len; i+=8){
+      char ch = 0;
+      for(b=0; b<8; b++){
+         ch = (ch << 1) | input_bits[i+b];
+      }
+      target_str[out_idx++] = ch;
+   }
+   target_str[out_idx] = '\0';
+}
+
+int main(){
+   int choice;
+
+   while(1) {
+      printf("1. Send Side\n");
+      printf("2. Receive Side\n");
+      printf("3. Exit\n");
+      printf("Enter your choice: ");
+      scanf("%d", &choice);
+      getchar();
+
+      if(choice == 3) {
+         printf("Exiting...\n");
+         break;
+      }
+
+      switch(choice) {
+         case 1: {
+            int i,b,bit = 0;
+            printf("\nEnter string to send: ");
+            scanf("%[^\n]", str);
+            getchar();
+
+            int str_len = strlen(str);
+            for(i=0; i<str_len; i++){
+               char ch = str[i];
+               for(b=7; b>=0; b--){
+                  data[bit++] = (ch >> b) & 1;
+               }
+            }
+            print("\nData: ", data, bit);
+
+            int stufflen = bit_stuffing(data, bit, stuff);
+            print("Stuffed Bits:    ", stuff, stufflen);
+
+            sender_framelen = 0;
+            for(i=0; i<flaglen; i++) sender_framed[sender_framelen++] = flag[i];
+            for(i=0; i<stufflen; i++) sender_framed[sender_framelen++] = stuff[i];
+            for(i=0; i<flaglen; i++) sender_framed[sender_framelen++] = flag[i];
+
+            print("Framed Bits:", sender_framed, sender_framelen);
+            break;
+         }
+
+         case 2: {
+            int i,rx_choice;
+            int active_framed[max_stuff];
+            int active_framelen = 0;
+
+            printf("1. Coverted Data\n");
+            printf("2. Enter Data\n");
+            printf("Enter choice : ");
+            scanf("%d", &rx_choice);
+            getchar();
+
+            if(rx_choice == 1) {
+               if(sender_framelen == 0) {
+                  printf("\nNo sender data available\n");
+                  break;
+               }
+               active_framelen = sender_framelen;
+               for(i=0; i<sender_framelen; i++) {
+                  active_framed[i] = sender_framed[i];
+               }
+               print("\nSender Data: ", active_framed, active_framelen);
+            }
+            else if(rx_choice == 2) {
+               char bit_string[max_stuff];
+               printf("\nEnter receiver Data:\n");
+               scanf("%s", bit_string);
+
+               active_framelen = strlen(bit_string);
+               for(i=0; i<active_framelen; i++) {
+                  active_framed[i] = bit_string[i] - '0';
+               }
+            }
+            else {
+               printf("Invalid selection choice\n");
+               break;
+            }
+
+            int destufflen = bit_destuffing(active_framed, active_framelen, destuff);
+
+            if(destufflen == -1) {
+               printf("Frame rejected due to transmission error\n");
+            } else {
+               print("\nDestuffed Bits:  ", destuff, destufflen);
+
+               decode_binary_to_string(destuff, destufflen, output_str);
+               printf("Decoded String:  %s\n", output_str);
+            }
+            break;
+         }
+
+         default:
+            printf("Invalid main choice option\n");
+      }
+   }
+
+   return 0;
+}
+
+[24bcs062@mepcolinux ex1]$./bit
+Enter string to send: ~?
+
+Data:  01111110 00111111
+Stuffed Bits:     01111101 00011111 01
+Framed Bits: 01111110 01111101 00011111 01011111 10
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 2
+1. Coverted Data
+2. Enter Data
+Enter choice : 1
+
+Sender Data:  01111110 01111101 00011111 01011111 10
+
+Destuffed Bits:   01111110 00111111
+Decoded String:  ~?
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 2
+1. Coverted Data
+2. Enter Data
+Enter choice : 2
+
+Enter receiver Data:
+011111100111111100111100101111110
+
+Error: Invalid stuffing detected
+Frame rejected due to transmission error
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 3
+Exiting...
+[24bcs062@mepcolinux ex1]$./bit
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 1
+
+Enter string to send: ~?
+
+Data:  01111110 00111111
+Stuffed Bits:     01111101 00011111 01
+Framed Bits: 01111110 01111101 00011111 01011111 10
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 2
+1. Coverted Data
+2. Enter Data
+Enter choice : 2
+
+Enter receiver Data:
+0111111001111101000111110101111110
+
+Destuffed Bits:   01111110 00111111
+Decoded String:  ~?
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice: 3
+Exiting...
+
+
+[24bcs062@mepcolinux ex1]$[24bcs062@mepcolinux ex1]$cat bytestuffing.c
+#include <stdio.h>
+#include <string.h>
+
+#define MAX 100
+
+int dataBytes[MAX];
+int dataBits[MAX * 8];
+int stuffedBytes[MAX * 2];
+int sender_framed[MAX * 2];
+int sender_framelen = 0;
+int destuffedBytes[MAX];
+
+int flagByte, escByte;
+
+int bitsToByte(int bits[]) {
+   int val = 0;
+   int i;
+   for (i = 0; i < 8; i++) {
+      val = val * 2 + bits[i];
+   }
+   return val;
+}
+
+void printByteBinary(int Byte) {
+   int i;
+   for (i = 7; i >= 0; i--) {
+      printf("%d", (Byte >> i) & 1);
+   }
+}
+
+void printByteAsBinary(const char * label, int ass[], int n) {
+   int i;
+   printf("%s:", label);
+   for (i = 0; i < n; i++) {
+      printByteBinary(ass[i]);
+      printf(" ");
+   }
+   printf("\n");
+}
+
+int byte_stuffing(int input_bytes[], int input_len, int output_bytes[]) {
+   int j = 0;
+   int i;
+   for (i = 0; i < input_len; i++) {
+      if (input_bytes[i] == flagByte || input_bytes[i] == escByte) {
+         output_bytes[j++] = escByte;
+         output_bytes[j++] = input_bytes[i];
+      } else {
+         output_bytes[j++] = input_bytes[i];
+      }
+   }
+   return j;
+}
+
+int byte_destuffing(int input_framed[], int total_len, int output_bytes[]) {
+   int m = 0;
+   int i;
+
+   if (input_framed[0] != flagByte || input_framed[total_len - 1] != flagByte) {
+      printf("\nFrame Missing Start/End Flag\n");
+      return -1;
+   }
+
+   for (i = 1; i < total_len - 1; i++) {
+      if (input_framed[i] == escByte) {
+         if (i + 1 >= total_len - 1) {
+            printf("\nDangling ESC byte\n");
+            return -1;
+         }
+         i++;
+         output_bytes[m++] = input_framed[i];
+      } else if (input_framed[i] == flagByte) {
+         printf("\nUnexpected unescaped flag\n");
+         return -1;
+      } else {
+         output_bytes[m++] = input_framed[i];
+      }
+   }
+   return m;
+}
+
+void decode_bytes_to_string(int input_bytes[], int input_len, char target_str[]) {
+   int i;
+   for (i = 0; i < input_len; i++) {
+      target_str[i] = (char)input_bytes[i];
+   }
+   target_str[input_len] = '\0';
+}
+
+int main() {
+   int choice;
+   int fbits[8], ebits[8];
+   char message[MAX];
+   int i;
+
+   printf("Enter Flag Byte: ");
+   for (i = 0; i < 8; i++) scanf("%d", &fbits[i]);
+   flagByte = bitsToByte(fbits);
+
+   printf("Enter ESC Byte: ");
+   for (i = 0; i < 8; i++) scanf("%d", &ebits[i]);
+   escByte = bitsToByte(ebits);
+   getchar();
+
+   while (1) {
+      printf("1. Send Side\n");
+      printf("2. Receive Side\n");
+      printf("3. Exit\n");
+      printf("Enter your choice : ");
+      scanf("%d", &choice);
+      getchar();
+
+      if (choice == 3) {
+         printf("Exiting...\n");
+         break;
+      }
+
+      switch (choice) {
+         case 1: {
+            int numBytes;
+            int bitIdx = 0;
+            int stuffedLen;
+
+            printf("\nEnter Message String: ");
+            scanf("%[^\n]",&message);
+            getchar();
+
+            numBytes = strlen(message);
+
+            for (i = 0; i < numBytes; i++) {
+               int asciiVal = (int)message[i];
+               int b;
+               for (b = 7; b >= 0; b--) {
+                  dataBits[bitIdx++] = (asciiVal >> b) & 1;
+               }
+            }
+
+            for (i = 0; i < numBytes; i++) {
+               int tmp[8];
+               int b;
+               for (b = 0; b < 8; b++) {
+                  tmp[b] = dataBits[i * 8 + b];
+               }
+               dataBytes[i] = bitsToByte(tmp);
+            }
+
+            printByteAsBinary("Original Data", dataBytes, numBytes);
+
+            stuffedLen = byte_stuffing(dataBytes, numBytes, stuffedBytes);
+            printByteAsBinary("Stuffed Data ", stuffedBytes, stuffedLen);
+
+            sender_framelen = 0;
+            sender_framed[sender_framelen++] = flagByte;
+            for (i = 0; i < stuffedLen; i++) {
+               sender_framed[sender_framelen++] = stuffedBytes[i];
+            }
+            sender_framed[sender_framelen++] = flagByte;
+
+            printByteAsBinary("Framed Data  ", sender_framed, sender_framelen);
+            break;
+         }
+
+         case 2: {
+            int rx_choice;
+            int active_framed[MAX * 2];
+            int active_framelen = 0;
+            int destuffedLen;
+
+            printf("1. Converted Data\n");
+            printf("2. Enter Data\n");
+            printf("Enter choice (1 or 2): ");
+            scanf("%d", &rx_choice);
+            getchar();
+
+            if (rx_choice == 1) {
+               if (sender_framelen == 0) {
+                  printf("\nNo active Sender Data avaiable\n");
+                  break;
+               }
+               active_framelen = sender_framelen;
+               for (i = 0; i < sender_framelen; i++) {
+                  active_framed[i] = sender_framed[i];
+               }
+               printByteAsBinary("\nSender Data", active_framed, active_framelen);
+            }
+            else if (rx_choice == 2) {
+               printf("\nEnter total bytes:");
+               scanf("%d", &active_framelen);
+
+               printf("Enter each byte:\n");
+               for (i = 0; i < active_framelen; i++) {
+                  char binary_string[9];
+                  int tmp_bits[8];
+                  int b;
+                  printf("Byte %d: ", i + 1);
+                  scanf("%s", binary_string);
+
+                  for (b = 0; b < 8; b++) {
+                     tmp_bits[b] = binary_string[b] - '0';
+                  }
+                  active_framed[i] = bitsToByte(tmp_bits);
+               }
+               getchar();
+               printByteAsBinary("\nEntered Data", active_framed, active_framelen);
+            }
+            else {
+               printf("Invalid option\n");
+               break;
+            }
+
+            destuffedLen = byte_destuffing(active_framed, active_framelen, destuffedBytes);
+
+            if (destuffedLen == -1) {
+               printf("Frame rejected due to transmission validation\n");
+            } else {
+               char outputString[MAX];
+               printByteAsBinary("Destuffed Data", destuffedBytes, destuffedLen);
+
+               decode_bytes_to_string(destuffedBytes, destuffedLen, outputString);
+
+               printf("\nReceived Message String: %s\n", outputString);
+            }
+            break;
+         }
+
+         default:
+            printf("Invalid\n");
+      }
+   }
+   return 0;
+}
+
+
+[24bcs062@mepcolinux ex1]$./byte
+Enter Flag Byte: 0 1 0 0 0 1 1 0
+Enter ESC Byte: 0 1 0 0 0 1 0 1
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 1
+
+Enter Message String: AB
+Original Data:01000001 01000010
+Stuffed Data :01000001 01000010
+Framed Data  :01000110 01000001 01000010 01000110
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 1
+
+Enter Message String: AFB
+Original Data:01000001 01000110 01000010
+Stuffed Data :01000001 01000101 01000110 01000010
+Framed Data  :01000110 01000001 01000101 01000110 01000010 01000110
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 1
+
+Enter Message String: AEB
+Original Data:01000001 01000101 01000010
+Stuffed Data :01000001 01000101 01000101 01000010
+Framed Data  :01000110 01000001 01000101 01000101 01000010 01000110
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 1
+
+Enter Message String: AEFB
+Original Data:01000001 01000101 01000110 01000010
+Stuffed Data :01000001 01000101 01000101 01000101 01000110 01000010
+Framed Data  :01000110 01000001 01000101 01000101 01000101 01000110 01000010 01000110
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 1
+
+Enter Message String: AEEB
+Original Data:01000001 01000101 01000101 01000010
+Stuffed Data :01000001 01000101 01000101 01000101 01000101 01000010
+Framed Data  :01000110 01000001 01000101 01000101 01000101 01000101 01000010 01000110
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 2
+1. Converted Data
+2. Enter Data
+Enter choice (1 or 2): 2
+
+Enter total bytes:5
+Enter each byte:
+Byte 1: 01010101
+Byte 2: 01010101
+Byte 3: 10101010
+Byte 4: 01010101
+Byte 5: 10000011
+
+Entered Data:01010101 01010101 10101010 01010101 10000011
+
+Frame Missing Start/End Flag
+Frame rejected due to transmission validation
+1. Send Side
+2. Receive Side
+3. Exit
+Enter your choice : 3
+Exiting...
